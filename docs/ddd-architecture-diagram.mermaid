@@ -1,0 +1,231 @@
+classDiagram
+    %% ==========================================
+    %% Adapter Layer (适配层) - 处理外部请求
+    %% 作用: 将外部协议转换为应用层能理解的格式
+    %% ==========================================
+    namespace Adapter {
+        class UserController {
+            +register(request)
+            +getUserById(id)
+            职责: HTTP接口适配
+        }
+        class OrderEventListener {
+            +onOrderCreated(message)
+            职责: MQ消息适配
+        }
+    }
+
+    %% ==========================================
+    %% Client Layer (API定义层) - 对外契约
+    %% 作用: 定义系统对外暴露的接口和DTO
+    %% ==========================================
+    namespace Client {
+        class UserServiceI {
+            <<interface>>
+            +register(cmd) UserDTO
+            +queryById(qry) UserDTO
+        }
+        class UserRegisterCmd {
+            +String username
+            +String email
+            +String password
+            职责: 命令对象(写操作)
+        }
+        class UserByIdQry {
+            +Long userId
+            职责: 查询对象(读操作)
+        }
+        class UserDTO {
+            +Long id
+            +String username
+            +String email
+            职责: 数据传输对象
+        }
+    }
+
+    %% ==========================================
+    %% Application Layer (应用层) - 业务流程编排
+    %% 作用: 协调领域对象完成业务用例，不包含业务逻辑
+    %% ==========================================
+    namespace Application {
+        class UserApplicationService {
+            +register(cmd) UserDTO
+            +queryById(qry) UserDTO
+            职责: 应用服务门面
+        }
+        class UserRegisterCmdExe {
+            +execute(cmd) UserDTO
+            职责: 用户注册用例执行器
+            流程: 1.校验 2.调用领域服务
+            3.保存 4.发送通知
+        }
+        class UserByIdQryExe {
+            +execute(qry) UserDTO
+            职责: 查询执行器
+        }
+        class UserAssembler {
+            +toDTO(user) UserDTO
+            +toDO(cmd) User
+            职责: DTO与领域对象转换
+        }
+    }
+
+    %% ==========================================
+    %% Domain Layer (领域层) - 核心业务逻辑
+    %% 作用: 封装业务规则，是系统的核心价值
+    %% ==========================================
+    namespace Domain {
+        class User {
+            -Long id
+            -Email email
+            -UserStatus status
+            -String password
+            +register() 注册业务规则
+            +activate() 激活
+            +changeEmail(email) 修改邮箱
+            职责: 用户聚合根
+            规则: 所有业务逻辑封装在此
+        }
+        class Email {
+            -String value
+            +validate() 邮箱格式验证
+            职责: 值对象(不可变)
+        }
+        class UserStatus {
+            <<enumeration>>
+            INACTIVE
+            ACTIVE
+            FROZEN
+        }
+        class UserDomainService {
+            +checkDuplicateEmail(email)
+            +encryptPassword(pwd)
+            职责: 领域服务
+            场景: 跨聚合的业务逻辑
+        }
+        class IUserRepository {
+            <<interface>>
+            +save(user) User
+            +findById(id) User
+            +findByEmail(email) User
+            职责: 仓储接口(在领域层定义)
+            目的: 领域层不依赖基础设施
+        }
+        class INotificationGateway {
+            <<interface>>
+            +sendWelcomeEmail(user)
+            职责: 防腐层接口
+            目的: 隔离第三方依赖
+        }
+    }
+
+    %% ==========================================
+    %% Infrastructure Layer (基础设施层) - 技术实现
+    %% 作用: 提供技术支撑，实现领域层定义的接口
+    %% ==========================================
+    namespace Infrastructure {
+        class UserRepositoryImpl {
+            -UserMapper mapper
+            -UserConverter converter
+            +save(user) User
+            +findById(id) User
+            职责: 仓储实现(MyBatis)
+            技术: 将领域对象转为PO存储
+        }
+        class UserMapper {
+            <<MyBatis>>
+            +insert(po)
+            +selectById(id) UserPO
+            职责: MyBatis Mapper
+        }
+        class UserPO {
+            +Long id
+            +String email
+            +String status
+            职责: 持久化对象(数据库表映射)
+        }
+        class UserConverter {
+            +toPO(user) UserPO
+            +toDO(po) User
+            职责: 领域对象与PO互转
+        }
+        class NotificationGatewayImpl {
+            -EmailClient emailClient
+            +sendWelcomeEmail(user)
+            职责: 通知网关实现
+            技术: 调用第三方邮件服务
+        }
+        class EmailClient {
+            +send(to, subject, body)
+            职责: 第三方邮件客户端
+        }
+    }
+
+    %% ==========================================
+    %% 依赖关系 (体现DDD的依赖倒置原则)
+    %% 核心: 高层不依赖低层，都依赖抽象
+    %% ==========================================
+    
+    %% Adapter -> Application
+    UserController --> UserApplicationService : 调用
+    UserController --> UserRegisterCmd : 使用
+    UserController --> UserDTO : 返回
+    
+    %% Application -> Domain
+    UserApplicationService --> UserRegisterCmdExe : 委托
+    UserApplicationService --> UserByIdQryExe : 委托
+    UserRegisterCmdExe --> UserDomainService : 使用
+    UserRegisterCmdExe --> IUserRepository : 依赖接口
+    UserRegisterCmdExe --> INotificationGateway : 依赖接口
+    UserRegisterCmdExe --> UserAssembler : 转换
+    
+    %% Domain 内部关系
+    User *-- Email : 包含
+    User *-- UserStatus : 包含
+    UserDomainService --> IUserRepository : 依赖接口
+    
+    %% Infrastructure -> Domain (实现接口)
+    UserRepositoryImpl ..|> IUserRepository : 实现
+    NotificationGatewayImpl ..|> INotificationGateway : 实现
+    UserRepositoryImpl --> UserMapper : 使用
+    UserRepositoryImpl --> UserConverter : 使用
+    UserMapper --> UserPO : 操作
+    NotificationGatewayImpl --> EmailClient : 使用
+
+    %% ==========================================
+    %% 关键说明 (使用注释形式)
+    %% ==========================================
+    %% 【领域层 - 核心】
+    %% 1. 封装所有业务规则
+    %% 2. 不依赖任何技术实现
+    %% 3. 定义仓储和网关接口
+    %% 4. 是整个系统的核心价值
+    
+    %% 【应用层 - 编排】
+    %% 1. 协调领域对象完成用例
+    %% 2. 事务边界控制
+    %% 3. DTO转换
+    %% 4. 不包含业务逻辑
+    
+    %% 【基础设施层 - 实现】
+    %% 1. 实现领域层定义的接口
+    %% 2. 依赖倒置: 依赖领域层
+    %% 3. 处理技术细节(DB/MQ/缓存)
+    
+    %% 【适配层 - 转换】
+    %% 1. 处理不同协议(HTTP/MQ)
+    %% 2. 转换外部请求为应用层格式
+    %% 3. 参数校验
+
+    %% ==========================================
+    %% 核心设计原则
+    %% ==========================================
+    %% 【依赖倒置原则】
+    %% Application和Domain只依赖接口
+    %% Infrastructure实现这些接口
+    %% 高层模块不依赖低层模块
+    
+    %% 【关注点分离】
+    %% 领域层: What (业务规则)
+    %% 应用层: When (业务流程)
+    %% 基础设施层: How (技术实现)

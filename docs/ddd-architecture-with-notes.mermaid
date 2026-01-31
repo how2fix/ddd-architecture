@@ -1,0 +1,143 @@
+graph TB
+    %% ==========================================
+    %% 说明框区域
+    %% ==========================================
+    subgraph Legend["📌 核心设计原则"]
+        DIP["🔷 依赖倒置原则<br/>高层模块(Domain/Application)只依赖接口<br/>低层模块(Infrastructure)实现接口<br/>依赖方向: Infrastructure → Domain"]
+        SoC["🔷 关注点分离<br/>Domain层: What - 业务规则是什么<br/>Application层: When - 何时执行流程<br/>Infrastructure层: How - 如何技术实现"]
+        Flow["🔷 请求流转<br/>HTTP请求 → Adapter → Application<br/>→ Domain → Infrastructure"]
+    end
+
+    %% ==========================================
+    %% Adapter Layer (适配层)
+    %% ==========================================
+    subgraph Adapter["🌐 Adapter Layer - 适配层"]
+        direction TB
+        AdapterNote["【职责】<br/>1. 接收外部请求(HTTP/MQ/定时任务)<br/>2. 协议转换和参数校验<br/>3. 调用Application层"]
+        
+        Controller["UserController<br/>━━━━━━━━━━<br/>+ register(request)<br/>+ getUserById(id)<br/>━━━━━━━━━━<br/>HTTP接口适配"]
+        MQListener["OrderEventListener<br/>━━━━━━━━━━<br/>+ onOrderCreated(msg)<br/>━━━━━━━━━━<br/>MQ消息适配"]
+    end
+
+    %% ==========================================
+    %% Client Layer (API定义层)
+    %% ==========================================
+    subgraph Client["📋 Client Layer - 对外契约"]
+        direction TB
+        ClientNote["【职责】<br/>1. 定义对外API接口<br/>2. 定义DTO对象<br/>3. CQRS分离(Command/Query)"]
+        
+        ServiceI["《interface》<br/>UserServiceI<br/>━━━━━━━━━━<br/>+ register(cmd): UserDTO<br/>+ queryById(qry): UserDTO"]
+        
+        RegCmd["UserRegisterCmd<br/>━━━━━━━━━━<br/>+ username: String<br/>+ email: String<br/>+ password: String<br/>━━━━━━━━━━<br/>命令对象(写)"]
+        
+        QryObj["UserByIdQry<br/>━━━━━━━━━━<br/>+ userId: Long<br/>━━━━━━━━━━<br/>查询对象(读)"]
+        
+        DTO["UserDTO<br/>━━━━━━━━━━<br/>+ id: Long<br/>+ username: String<br/>+ email: String<br/>━━━━━━━━━━<br/>数据传输对象"]
+    end
+
+    %% ==========================================
+    %% Application Layer (应用层)
+    %% ==========================================
+    subgraph Application["⚙️ Application Layer - 应用层"]
+        direction TB
+        AppNote["【职责】<br/>1. 编排业务流程(不含业务逻辑)<br/>2. 事务边界控制<br/>3. DTO与领域对象转换<br/>4. 调用Domain层完成用例"]
+        
+        AppService["UserApplicationService<br/>━━━━━━━━━━<br/>+ register(cmd): UserDTO<br/>+ queryById(qry): UserDTO<br/>━━━━━━━━━━<br/>应用服务门面"]
+        
+        CmdExe["UserRegisterCmdExe<br/>━━━━━━━━━━<br/>+ execute(cmd): UserDTO<br/>━━━━━━━━━━<br/>执行流程:<br/>1️⃣ 参数校验<br/>2️⃣ 调用领域服务<br/>3️⃣ 保存到仓储<br/>4️⃣ 发送通知<br/>5️⃣ 返回DTO"]
+        
+        QryExe["UserByIdQryExe<br/>━━━━━━━━━━<br/>+ execute(qry): UserDTO<br/>━━━━━━━━━━<br/>查询执行器"]
+        
+        Assembler["UserAssembler<br/>━━━━━━━━━━<br/>+ toDTO(user): UserDTO<br/>+ toDO(cmd): User<br/>━━━━━━━━━━<br/>DTO转换器"]
+    end
+
+    %% ==========================================
+    %% Domain Layer (领域层) - 核心
+    %% ==========================================
+    subgraph Domain["💎 Domain Layer - 领域层 (核心)"]
+        direction TB
+        DomainNote["【职责 - 系统核心价值】<br/>1. 封装所有业务规则和逻辑<br/>2. 完全独立,不依赖任何技术实现<br/>3. 定义仓储和网关接口<br/>4. 使用充血模型(行为+数据)"]
+        
+        UserEntity["《AggregateRoot》<br/>User<br/>━━━━━━━━━━<br/>- id: Long<br/>- email: Email<br/>- status: UserStatus<br/>- password: String<br/>━━━━━━━━━━<br/>+ register() 注册规则<br/>+ activate() 激活<br/>+ changeEmail() 邮箱变更<br/>+ validatePassword() 密码校验<br/>━━━━━━━━━━<br/>🔑 聚合根: 业务逻辑载体"]
+        
+        EmailVO["《ValueObject》<br/>Email<br/>━━━━━━━━━━<br/>- value: String<br/>━━━━━━━━━━<br/>+ validate() 格式验证<br/>━━━━━━━━━━<br/>🔑 值对象: 不可变"]
+        
+        StatusEnum["《enumeration》<br/>UserStatus<br/>━━━━━━━━━━<br/>INACTIVE 未激活<br/>ACTIVE 正常<br/>FROZEN 冻结"]
+        
+        DomainService["UserDomainService<br/>━━━━━━━━━━<br/>+ checkDuplicateEmail()<br/>+ encryptPassword()<br/>━━━━━━━━━━<br/>🔑 领域服务<br/>场景: 跨聚合业务逻辑"]
+        
+        IRepo["《interface》<br/>IUserRepository<br/>━━━━━━━━━━<br/>+ save(user): User<br/>+ findById(id): User<br/>+ findByEmail(): User<br/>━━━━━━━━━━<br/>🔑 仓储接口<br/>在Domain层定义"]
+        
+        IGateway["《interface》<br/>INotificationGateway<br/>━━━━━━━━━━<br/>+ sendWelcomeEmail(user)<br/>━━━━━━━━━━<br/>🔑 防腐层接口<br/>隔离第三方依赖"]
+    end
+
+    %% ==========================================
+    %% Infrastructure Layer (基础设施层)
+    %% ==========================================
+    subgraph Infrastructure["🔧 Infrastructure Layer - 基础设施层"]
+        direction TB
+        InfraNote["【职责】<br/>1. 实现Domain层定义的接口<br/>2. 处理技术细节(DB/缓存/MQ)<br/>3. 依赖倒置: 依赖Domain层<br/>4. 数据库实体与领域对象转换"]
+        
+        RepoImpl["UserRepositoryImpl<br/>━━━━━━━━━━<br/>- mapper: UserMapper<br/>- converter: UserConverter<br/>━━━━━━━━━━<br/>+ save(user): User<br/>+ findById(id): User<br/>━━━━━━━━━━<br/>MyBatis实现仓储"]
+        
+        Mapper["《MyBatis》<br/>UserMapper<br/>━━━━━━━━━━<br/>+ insert(po): void<br/>+ selectById(id): UserPO<br/>+ update(po): void<br/>━━━━━━━━━━<br/>数据库操作"]
+        
+        PO["UserPO<br/>━━━━━━━━━━<br/>+ id: Long<br/>+ email: String<br/>+ status: String<br/>+ password: String<br/>━━━━━━━━━━<br/>持久化对象<br/>对应数据库表"]
+        
+        Converter["UserConverter<br/>━━━━━━━━━━<br/>+ toPO(user): UserPO<br/>+ toDO(po): User<br/>━━━━━━━━━━<br/>领域对象↔PO转换"]
+        
+        GatewayImpl["NotificationGatewayImpl<br/>━━━━━━━━━━<br/>- emailClient: EmailClient<br/>━━━━━━━━━━<br/>+ sendWelcomeEmail(user)<br/>━━━━━━━━━━<br/>通知网关实现"]
+        
+        ThirdParty["EmailClient<br/>━━━━━━━━━━<br/>+ send(to, subject, body)<br/>━━━━━━━━━━<br/>第三方邮件服务"]
+    end
+
+    %% ==========================================
+    %% 依赖关系 (重点: 体现依赖倒置)
+    %% ==========================================
+    
+    %% Adapter -> Application
+    Controller -->|调用| AppService
+    Controller -.->|使用| RegCmd
+    Controller -.->|返回| DTO
+    
+    %% Application -> Domain
+    AppService -->|委托| CmdExe
+    AppService -->|委托| QryExe
+    CmdExe -->|使用| DomainService
+    CmdExe -->|依赖接口| IRepo
+    CmdExe -->|依赖接口| IGateway
+    CmdExe -->|转换| Assembler
+    Assembler -.->|生成| UserEntity
+    
+    %% Domain内部
+    UserEntity -->|包含| EmailVO
+    UserEntity -->|包含| StatusEnum
+    DomainService -->|依赖接口| IRepo
+    
+    %% Infrastructure -> Domain (依赖倒置的关键!)
+    RepoImpl -.->|实现| IRepo
+    GatewayImpl -.->|实现| IGateway
+    RepoImpl -->|使用| Mapper
+    RepoImpl -->|使用| Converter
+    Mapper -->|操作| PO
+    Converter -->|转换| PO
+    Converter -->|转换| UserEntity
+    GatewayImpl -->|调用| ThirdParty
+
+    %% ==========================================
+    %% 样式定义
+    %% ==========================================
+    classDef adapterStyle fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef clientStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef appStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef domainStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:3px
+    classDef infraStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef noteStyle fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef legendStyle fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    
+    class Controller,MQListener,AdapterNote adapterStyle
+    class ServiceI,RegCmd,QryObj,DTO,ClientNote clientStyle
+    class AppService,CmdExe,QryExe,Assembler,AppNote appStyle
+    class UserEntity,EmailVO,StatusEnum,DomainService,IRepo,IGateway,DomainNote domainStyle
+    class RepoImpl,Mapper,PO,Converter,GatewayImpl,ThirdParty,InfraNote infraStyle
+    class DIP,SoC,Flow legendStyle

@@ -1,0 +1,217 @@
+graph TB
+    %% ==========================================
+    %% 整体架构视图 - 展示层次和数据流
+    %% ==========================================
+    
+    subgraph External["🌍 外部世界"]
+        HTTP["HTTP请求<br/>GET /users/123<br/>POST /users/register"]
+        MQ["消息队列<br/>OrderCreatedEvent"]
+        Schedule["定时任务<br/>每天凌晨同步"]
+    end
+
+    %% ==========================================
+    %% 第一层: Adapter (适配层)
+    %% ==========================================
+    subgraph Layer1["📱 Adapter Layer - 适配层"]
+        direction LR
+        style Layer1 fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+        
+        subgraph AdapterBox["职责: 协议转换 & 参数校验"]
+            Controller["UserController<br/>━━━━━━━<br/>• register(request)<br/>• getUserById(id)<br/>━━━━━━━<br/>处理HTTP请求"]
+            
+            Listener["OrderEventListener<br/>━━━━━━━<br/>• onOrderCreated()<br/>━━━━━━━<br/>处理MQ消息"]
+            
+            Job["OrderSyncJob<br/>━━━━━━━<br/>• syncOrders()<br/>━━━━━━━<br/>定时任务调度"]
+        end
+        
+        AdapterPrinciple["✅ 隔离外部协议<br/>✅ 统一接入标准<br/>✅ 参数预校验"]
+    end
+
+    %% ==========================================
+    %% 第二层: Application (应用层)
+    %% ==========================================
+    subgraph Layer2["⚙️ Application Layer - 应用层"]
+        direction LR
+        style Layer2 fill:#fff3e0,stroke:#e65100,stroke-width:3px
+        
+        subgraph AppBox["职责: 流程编排 & 用例实现"]
+            AppService["UserApplicationService<br/>━━━━━━━<br/>应用服务门面"]
+            
+            RegisterUseCase["用例: 用户注册<br/>━━━━━━━<br/>1️⃣ 转换DTO→Domain<br/>2️⃣ 调用领域服务校验<br/>3️⃣ 保存聚合根<br/>4️⃣ 发送欢迎邮件<br/>5️⃣ 发布领域事件<br/>6️⃣ 转换Domain→DTO"]
+            
+            QueryUseCase["用例: 查询用户<br/>━━━━━━━<br/>1️⃣ 从仓储加载<br/>2️⃣ 转换为DTO<br/>3️⃣ 返回结果"]
+            
+            Transaction["🔄 事务边界<br/>@Transactional"]
+        end
+        
+        AppPrinciple["✅ 无业务逻辑<br/>✅ 编排Domain对象<br/>✅ 控制事务边界"]
+    end
+
+    %% ==========================================
+    %% 第三层: Domain (领域层) - 核心
+    %% ==========================================
+    subgraph Layer3["💎 Domain Layer - 领域层 ⭐核心⭐"]
+        direction LR
+        style Layer3 fill:#e8f5e9,stroke:#1b5e20,stroke-width:4px
+        
+        subgraph DomainBox["职责: 业务规则 & 核心逻辑"]
+            direction TB
+            
+            subgraph AggregateBox["聚合 (Aggregate)"]
+                User["User 聚合根<br/>━━━━━━━<br/>业务方法:<br/>• register() 注册规则<br/>• activate() 激活逻辑<br/>• changeEmail() 变更规则<br/>• freeze() 冻结逻辑<br/>━━━━━━━<br/>包含:<br/>• Email 值对象<br/>• UserStatus 枚举"]
+            end
+            
+            subgraph ServiceBox["领域服务"]
+                DomainService["UserDomainService<br/>━━━━━━━<br/>• checkDuplicateEmail()<br/>  检查邮箱唯一性<br/>• encryptPassword()<br/>  密码加密规则<br/>━━━━━━━<br/>跨聚合业务逻辑"]
+            end
+            
+            subgraph InterfaceBox["仓储接口 (防腐层)"]
+                IRepository["IUserRepository<br/>━━━━━━━<br/>• save(user)<br/>• findById(id)<br/>• findByEmail(email)<br/>━━━━━━━<br/>数据访问抽象"]
+                
+                IGateway["INotificationGateway<br/>━━━━━━━<br/>• sendWelcomeEmail(user)<br/>━━━━━━━<br/>第三方服务抽象"]
+            end
+        end
+        
+        DomainPrinciple["✅ 所有业务规则在此<br/>✅ 充血模型<br/>✅ 完全技术无关<br/>✅ 定义接口不依赖实现"]
+    end
+
+    %% ==========================================
+    %% 第四层: Infrastructure (基础设施层)
+    %% ==========================================
+    subgraph Layer4["🔧 Infrastructure Layer - 基础设施层"]
+        direction LR
+        style Layer4 fill:#fce4ec,stroke:#880e4f,stroke-width:3px
+        
+        subgraph InfraBox["职责: 技术实现 & 外部集成"]
+            direction TB
+            
+            subgraph DBBox["数据持久化"]
+                RepoImpl["UserRepositoryImpl<br/>━━━━━━━<br/>实现 IUserRepository<br/>━━━━━━━<br/>• MyBatis操作<br/>• Domain ↔ PO转换<br/>• 缓存处理"]
+                
+                DB[("💾 MySQL数据库<br/>━━━━━━━<br/>user表<br/>order表")]
+            end
+            
+            subgraph CacheBox["缓存"]
+                Redis[("🔴 Redis<br/>━━━━━━━<br/>用户缓存<br/>会话信息")]
+            end
+            
+            subgraph ThirdPartyBox["第三方集成"]
+                NotificationImpl["NotificationGatewayImpl<br/>━━━━━━━<br/>实现 INotificationGateway<br/>━━━━━━━<br/>• 调用邮件服务<br/>• 调用短信服务"]
+                
+                EmailService["📧 第三方邮件服务<br/>SendGrid/阿里云"]
+                SMSService["📱 第三方短信服务<br/>腾讯云/阿里云"]
+            end
+            
+            subgraph MQBox["消息队列"]
+                RabbitMQ["🐰 RabbitMQ<br/>━━━━━━━<br/>发布领域事件<br/>异步处理"]
+            end
+        end
+        
+        InfraPrinciple["✅ 实现Domain接口<br/>✅ 依赖倒置原则<br/>✅ 可替换性"]
+    end
+
+    %% ==========================================
+    %% Client API (对外契约)
+    %% ==========================================
+    subgraph ClientAPI["📋 Client API - 对外契约"]
+        style ClientAPI fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+        
+        DTO["DTO对象<br/>━━━━━━━<br/>UserDTO<br/>OrderDTO<br/>━━━━━━━<br/>数据传输"]
+        
+        Command["Command对象<br/>━━━━━━━<br/>UserRegisterCmd<br/>OrderCreateCmd<br/>━━━━━━━<br/>写操作命令"]
+        
+        Query["Query对象<br/>━━━━━━━<br/>UserByIdQry<br/>OrderListQry<br/>━━━━━━━<br/>读操作查询"]
+        
+        CQRS["CQRS模式<br/>读写分离"]
+    end
+
+    %% ==========================================
+    %% 数据流转 (请求处理全流程)
+    %% ==========================================
+    HTTP -->|1️⃣ HTTP请求| Controller
+    MQ -->|1️⃣ MQ消息| Listener
+    Schedule -->|1️⃣ 定时触发| Job
+    
+    Controller -->|2️⃣ 调用服务<br/>传入Command/Query| AppService
+    Listener -->|2️⃣ 调用服务| AppService
+    Job -->|2️⃣ 调用服务| AppService
+    
+    AppService -->|3️⃣ 执行用例| RegisterUseCase
+    AppService -->|3️⃣ 执行用例| QueryUseCase
+    
+    RegisterUseCase -->|4️⃣ 调用业务规则| User
+    RegisterUseCase -->|4️⃣ 调用领域服务| DomainService
+    RegisterUseCase -->|5️⃣ 依赖接口| IRepository
+    RegisterUseCase -->|5️⃣ 依赖接口| IGateway
+    
+    QueryUseCase -->|4️⃣ 依赖接口| IRepository
+    
+    DomainService -->|依赖接口| IRepository
+    
+    %% Infrastructure实现接口 (依赖倒置!)
+    IRepository <-.->|6️⃣ 实现| RepoImpl
+    IGateway <-.->|6️⃣ 实现| NotificationImpl
+    
+    RepoImpl -->|7️⃣ 数据访问| DB
+    RepoImpl -->|7️⃣ 缓存| Redis
+    NotificationImpl -->|7️⃣ 调用| EmailService
+    NotificationImpl -->|7️⃣ 调用| SMSService
+    RegisterUseCase -->|8️⃣ 发布事件| RabbitMQ
+    
+    %% DTO使用关系
+    Controller -.->|使用| Command
+    Controller -.->|使用| Query
+    Controller -.->|返回| DTO
+    AppService -.->|返回| DTO
+
+    %% ==========================================
+    %% 关键设计原则说明框
+    %% ==========================================
+    subgraph Principles["🎯 DDD核心设计原则"]
+        style Principles fill:#ffebee,stroke:#b71c1c,stroke-width:3px
+        
+        P1["1️⃣ 依赖倒置 (DIP)<br/>━━━━━━━━━━━━━━<br/>• Domain层定义接口<br/>• Infrastructure层实现接口<br/>• 依赖方向: Infra → Domain<br/>• 高层不依赖低层细节"]
+        
+        P2["2️⃣ 关注点分离 (SoC)<br/>━━━━━━━━━━━━━━<br/>• Domain: What (业务规则)<br/>• Application: When (流程编排)<br/>• Infrastructure: How (技术实现)<br/>• 每层职责单一清晰"]
+        
+        P3["3️⃣ 充血模型 vs 贫血模型<br/>━━━━━━━━━━━━━━<br/>• User.register() ✅ 充血<br/>• UserService.register(user) ❌ 贫血<br/>• 业务逻辑在领域对象内"]
+        
+        P4["4️⃣ 防腐层 (ACL)<br/>━━━━━━━━━━━━━━<br/>• Gateway接口隔离第三方<br/>• Repository接口隔离数据库<br/>• 第三方变更不影响Domain"]
+        
+        P5["5️⃣ 聚合根 (Aggregate Root)<br/>━━━━━━━━━━━━━━<br/>• User是聚合根<br/>• 统一入口修改聚合内对象<br/>• 保证业务一致性"]
+    end
+
+    %% ==========================================
+    %% 实际问题解决方案
+    %% ==========================================
+    subgraph Solutions["💡 解决的实际问题"]
+        style Solutions fill:#fff9c4,stroke:#f57f17,stroke-width:3px
+        
+        Problem1["❌ 传统分层问题<br/>━━━━━━━━━━━━━━<br/>Controller → Service → DAO<br/>• 业务逻辑散落在Service<br/>• 贫血模型,只有get/set<br/>• 紧耦合数据库实现"]
+        
+        Solution1["✅ DDD解决方案<br/>━━━━━━━━━━━━━━<br/>• 业务规则在Domain对象<br/>• 充血模型,有行为有数据<br/>• 依赖接口,技术无关"]
+        
+        Problem2["❌ 代码腐化问题<br/>━━━━━━━━━━━━━━<br/>• if-else遍布Service<br/>• 业务规则重复<br/>• 修改牵一发动全身"]
+        
+        Solution2["✅ DDD解决方案<br/>━━━━━━━━━━━━━━<br/>• 规则封装在聚合内<br/>• 单一修改点<br/>• 高内聚低耦合"]
+        
+        Problem3["❌ 第三方依赖问题<br/>━━━━━━━━━━━━━━<br/>• 直接调用第三方API<br/>• 更换服务成本高<br/>• 测试困难"]
+        
+        Solution3["✅ DDD解决方案<br/>━━━━━━━━━━━━━━<br/>• Gateway防腐层隔离<br/>• 轻松切换实现<br/>• Mock接口易测试"]
+    end
+
+    %% 关联问题和解决方案
+    Problem1 -.->|DDD改进| Solution1
+    Problem2 -.->|DDD改进| Solution2
+    Problem3 -.->|DDD改进| Solution3
+
+    %% ==========================================
+    %% 样式定义
+    %% ==========================================
+    classDef externalStyle fill:#e0e0e0,stroke:#424242,stroke-width:2px
+    classDef problemStyle fill:#ffcdd2,stroke:#c62828,stroke-width:2px
+    classDef solutionStyle fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    
+    class HTTP,MQ,Schedule externalStyle
+    class Problem1,Problem2,Problem3 problemStyle
+    class Solution1,Solution2,Solution3 solutionStyle
