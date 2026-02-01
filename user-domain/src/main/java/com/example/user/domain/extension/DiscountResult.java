@@ -97,9 +97,15 @@ public class DiscountResult {
      * 计算最终优惠金额（需要原始订单金额）
      */
     public BigDecimal calculateFinalDiscount(BigDecimal originalAmount) {
-        return switch (discountType) {
-            case PERCENT -> originalAmount.multiply(discountRate);
-            case AMOUNT, SHIPPING, COUPON -> discountAmount != null ? discountAmount : BigDecimal.ZERO;
-        };
+        switch (discountType) {
+            case PERCENT:
+                return originalAmount.multiply(discountRate);
+            case AMOUNT:
+            case SHIPPING:
+            case COUPON:
+                return discountAmount != null ? discountAmount : BigDecimal.ZERO;
+            default:
+                return BigDecimal.ZERO;
+        }
     }
 }

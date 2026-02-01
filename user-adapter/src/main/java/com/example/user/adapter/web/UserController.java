@@ -5,7 +5,7 @@ import com.example.user.client.dto.Response;
 import com.example.user.client.dto.UserDTO;
 import com.example.user.client.dto.cmd.UserRegisterCmd;
 import com.example.user.client.dto.query.UserByIdQry;
-import jakarta.validation.Valid;
+import javax.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

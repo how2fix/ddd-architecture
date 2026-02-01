@@ -19,13 +19,24 @@ public class ContinuousCheckinPointExt implements PointCalculateExtPt {
         int continuousDays = days.intValue();
 
         // 连续签到奖励
-        long bonusPoints = switch (continuousDays) {
-            case 3 -> 20L;      // 连续3天额外奖励20积分
-            case 7 -> 50L;      // 连续7天额外奖励50积分
-            case 15 -> 100L;    // 连续15天额外奖励100积分
-            case 30 -> 300L;    // 连续30天额外奖励300积分
-            default -> 0L;
-        };
+        long bonusPoints;
+        switch (continuousDays) {
+            case 3:
+                bonusPoints = 20L;
+                break;
+            case 7:
+                bonusPoints = 50L;
+                break;
+            case 15:
+                bonusPoints = 100L;
+                break;
+            case 30:
+                bonusPoints = 300L;
+                break;
+            default:
+                bonusPoints = 0L;
+                break;
+        }
 
         log.debug("连续签到奖励: userId={}, days={}, bonus={}", userId, continuousDays, bonusPoints);
         return bonusPoints;

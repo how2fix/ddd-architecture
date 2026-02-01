@@ -1,7 +1,7 @@
 package com.example.user.client.dto.query;
 
 import com.example.user.client.dto.Query;
-import jakarta.validation.constraints.NotNull;
+import javax.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
