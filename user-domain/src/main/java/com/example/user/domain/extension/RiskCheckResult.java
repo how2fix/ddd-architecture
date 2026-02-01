@@ -1,43 +1,19 @@
 package com.example.user.domain.extension;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 /**
  * 风控检查结果
+ *
+ * JDK 21 Feature: Record 类 - 不可变数据载体
+ * - 替代 Lombok @Data + @Builder
+ * - 内部枚举保持不变
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class RiskCheckResult {
-
-    /**
-     * 是否通过
-     */
-    private boolean pass;
-
-    /**
-     * 风控等级：SAFE-安全, WARN-警告, REJECT-拒绝
-     */
-    private RiskLevel riskLevel;
-
-    /**
-     * 提示信息
-     */
-    private String message;
-
-    /**
-     * 风控得分（0-100，分数越高风险越大）
-     */
-    private Integer score;
-
-    /**
-     * 风控动作：ALLOW-允许, CHALLENGE-挑战验证, BLOCK-阻止
-     */
-    private RiskAction action;
+public record RiskCheckResult(
+    boolean passed,
+    RiskLevel riskLevel,
+    String message,
+    Integer score,
+    RiskAction action
+) {
 
     /**
      * 风控等级
@@ -63,39 +39,21 @@ public class RiskCheckResult {
      * 创建通过结果
      */
     public static RiskCheckResult pass() {
-        return RiskCheckResult.builder()
-                .pass(true)
-                .riskLevel(RiskLevel.SAFE)
-                .message("风控检查通过")
-                .score(0)
-                .action(RiskAction.ALLOW)
-                .build();
+        return new RiskCheckResult(true, RiskLevel.SAFE, "风控检查通过", 0, RiskAction.ALLOW);
     }
 
     /**
      * 创建警告结果（需要验证）
      */
     public static RiskCheckResult warn(String message) {
-        return RiskCheckResult.builder()
-                .pass(false)
-                .riskLevel(RiskLevel.MEDIUM)
-                .message(message)
-                .score(50)
-                .action(RiskAction.CHALLENGE)
-                .build();
+        return new RiskCheckResult(false, RiskLevel.MEDIUM, message, 50, RiskAction.CHALLENGE);
     }
 
     /**
      * 创建拒绝结果
      */
     public static RiskCheckResult reject(String message) {
-        return RiskCheckResult.builder()
-                .pass(false)
-                .riskLevel(RiskLevel.REJECT)
-                .message(message)
-                .score(100)
-                .action(RiskAction.BLOCK)
-                .build();
+        return new RiskCheckResult(false, RiskLevel.REJECT, message, 100, RiskAction.BLOCK);
     }
 
     /**

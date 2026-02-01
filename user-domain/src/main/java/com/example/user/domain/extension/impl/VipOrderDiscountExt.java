@@ -26,13 +26,14 @@ public class VipOrderDiscountExt implements OrderDiscountExtPt {
         // 计算折扣金额（8折，优惠20%）
         BigDecimal discountAmount = amount.multiply(DISCOUNT_RATE);
 
-        return DiscountResult.builder()
-                .discountType(DiscountResult.DiscountType.PERCENT)
-                .discountRate(DISCOUNT_RATE)
-                .discountAmount(discountAmount.add(SHIPPING_FEE))  // 折扣+免运费
-                .freeShipping(true)
-                .freeShippingAmount(SHIPPING_FEE)
-                .description("VIP会员8折优惠+免运费")
-                .build();
+        return new DiscountResult(
+            discountAmount.add(SHIPPING_FEE),  // 折扣+免运费
+            "VIP会员8折优惠+免运费",
+            DiscountResult.DiscountType.PERCENT,
+            DISCOUNT_RATE,
+            SHIPPING_FEE,
+            null,
+            true
+        );
     }
 }

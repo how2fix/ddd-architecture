@@ -1,56 +1,27 @@
 package com.example.user.domain.extension;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 
 /**
  * 订单优惠结果
+ *
+ * JDK 21 Feature: Record 类 + Pattern Matching for switch
+ * - 不可变数据载体
+ * - 使用 when 子句进行条件守卫
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class DiscountResult {
-
-    /**
-     * 优惠金额
-     */
-    private BigDecimal discountAmount;
-
-    /**
-     * 优惠说明
-     */
-    private String description;
+public record DiscountResult(
+    BigDecimal discountAmount,
+    String description,
+    DiscountType discountType,
+    BigDecimal discountRate,
+    BigDecimal freeShippingAmount,
+    String couponId,
+    boolean freeShipping
+) {
 
     /**
      * 优惠类型：PERCENT-百分比, AMOUNT-固定金额, SHIPPING-运费
      */
-    private DiscountType discountType;
-
-    /**
-     * 折扣率（百分比类型使用，如0.1表示9折）
-     */
-    private BigDecimal discountRate;
-
-    /**
-     * 免运费金额
-     */
-    private BigDecimal freeShippingAmount;
-
-    /**
-     * 优惠券ID
-     */
-    private String couponId;
-
-    /**
-     * 是否免运费
-     */
-    private boolean freeShipping;
-
     public enum DiscountType {
         PERCENT,   // 百分比折扣
         AMOUNT,    // 固定金额减免
@@ -62,39 +33,27 @@ public class DiscountResult {
      * 创建百分比折扣结果
      */
     public static DiscountResult percentDiscount(BigDecimal rate, String description) {
-        return DiscountResult.builder()
-                .discountType(DiscountType.PERCENT)
-                .discountRate(rate)
-                .description(description)
-                .build();
+        return new DiscountResult(null, description, DiscountType.PERCENT, rate, null, null, false);
     }
 
     /**
      * 创建固定金额减免结果
      */
     public static DiscountResult amountDiscount(BigDecimal amount, String description) {
-        return DiscountResult.builder()
-                .discountType(DiscountType.AMOUNT)
-                .discountAmount(amount)
-                .description(description)
-                .build();
+        return new DiscountResult(amount, description, DiscountType.AMOUNT, null, null, null, false);
     }
 
     /**
      * 创建免运费结果
      */
     public static DiscountResult freeShipping(BigDecimal shippingFee, String description) {
-        return DiscountResult.builder()
-                .discountType(DiscountType.SHIPPING)
-                .discountAmount(shippingFee)
-                .freeShipping(true)
-                .freeShippingAmount(shippingFee)
-                .description(description)
-                .build();
+        return new DiscountResult(shippingFee, description, DiscountType.SHIPPING, null, shippingFee, null, true);
     }
 
     /**
      * 计算最终优惠金额（需要原始订单金额）
+     *
+     * JDK 21 Feature: Pattern matching for switch with when guards
      */
     public BigDecimal calculateFinalDiscount(BigDecimal originalAmount) {
         return switch (discountType) {

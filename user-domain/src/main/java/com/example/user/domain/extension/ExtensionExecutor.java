@@ -12,6 +12,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * 扩展点执行器
  * COLA架构：根据业务场景路由到对应的扩展点实现
  *
+ * JDK 21 Features:
+ * - Stream.toList() - Java 16+ 特性，直接收集为不可变列表
+ * - Lambda 表达式增强
+ *
  * 使用示例：
  * <pre>
  * &#64;Autowired
@@ -97,7 +101,7 @@ public class ExtensionExecutor {
         // 从缓存获取
         List<ExtensionCoordinate> extensions = extensionCache.computeIfAbsent(
                 extensionPoint,
-                k -> locateExtensions(extensionPoint)
+                k -> locateExtensions(k)
         );
 
         // 查找匹配的扩展点
@@ -121,12 +125,18 @@ public class ExtensionExecutor {
 
     /**
      * 定位扩展点实现
+     *
+     * JDK 21 Feature: Stream.toList() - Java 16+ 方法
+     * 替代 .collect(Collectors.toList())
      */
     @SuppressWarnings("unchecked")
-    private <T extends ExtensionPointI> List<ExtensionCoordinate> locateExtensions(Class<T> extensionPoint) {
+    private List<ExtensionCoordinate> locateExtensions(Class<?> extensionPoint) {
         // 获取所有实现该扩展点接口的Bean
-        Map<String, T> extensions = applicationContextHelper.getBeansOfType(extensionPoint);
+        Map<String, ?> extensions = applicationContextHelper.getBeansOfType(
+                (Class<? extends ExtensionPointI>) extensionPoint
+        );
 
+        // JDK 21: 使用 toList() 替代 collect(Collectors.toList())
         return extensions.values().stream()
                 .filter(bean -> bean.getClass().isAnnotationPresent(Extension.class))
                 .map(bean -> {

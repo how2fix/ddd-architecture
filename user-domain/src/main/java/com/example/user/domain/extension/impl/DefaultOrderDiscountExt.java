@@ -38,10 +38,14 @@ public class DefaultOrderDiscountExt implements OrderDiscountExtPt {
             description = "满100减10";
         }
 
-        return DiscountResult.builder()
-                .discountType(DiscountResult.DiscountType.AMOUNT)
-                .discountAmount(discount)
-                .description(description)
-                .build();
+        return new DiscountResult(
+            discount,
+            description,
+            DiscountResult.DiscountType.AMOUNT,
+            null,
+            null,
+            null,
+            false
+        );
     }
 }

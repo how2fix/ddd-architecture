@@ -21,11 +21,14 @@ public class NewUserOrderDiscountExt implements OrderDiscountExtPt {
         log.debug("计算新用户订单优惠: userId={}, amount={}", userId, amount);
 
         // 首单9折
-        return DiscountResult.builder()
-                .discountType(DiscountResult.DiscountType.PERCENT)
-                .discountRate(new BigDecimal("0.1"))  // 打9折，优惠10%
-                .discountAmount(amount.multiply(new BigDecimal("0.1")))
-                .description("新用户首单9折优惠")
-                .build();
+        return new DiscountResult(
+            amount.multiply(new BigDecimal("0.1")),
+            "新用户首单9折优惠",
+            DiscountResult.DiscountType.PERCENT,
+            new BigDecimal("0.1"),
+            null,
+            null,
+            false
+        );
     }
 }

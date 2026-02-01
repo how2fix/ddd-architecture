@@ -4,6 +4,8 @@ package com.example.user.client.exception;
  * 系统异常
  * COLA架构：不可预期的系统异常，需要告警
  *
+ * JDK 21 Feature: Sealed 类 - 被 BaseException.permits 限制
+ *
  * 使用场景：
  * - 数据库连接失败
  * - 外部服务调用失败
@@ -15,7 +17,7 @@ package com.example.user.client.exception;
  * - 不需要向用户展示详细信息
  * - 不可预期，需要技术介入
  */
-public class SysException extends BaseException {
+public final class SysException extends BaseException {
 
     private static final long serialVersionUID = 1L;
 

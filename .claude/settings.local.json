@@ -8,7 +8,12 @@
       "Bash(mvn:*)",
       "Bash(java:*)",
       "Bash(javac:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(where:*)",
+      "Bash(set:*)",
+      "Bash(\"/c/Program Files/Java/jdk-21.0.10/bin/java.exe\":*)",
+      "Bash(export:*)",
+      "Bash(export PATH=\"$JAVA_HOME/bin:$PATH\":*)"
     ]
   }
 }

@@ -4,6 +4,8 @@ package com.example.user.client.exception;
  * 业务异常
  * COLA架构：可预期的业务异常，需要友好提示用户
  *
+ * JDK 21 Feature: Sealed 类 - 被 BaseException.permits 限制
+ *
  * 使用场景：
  * - 用户不存在
  * - 邮箱已被注册
@@ -15,7 +17,7 @@ package com.example.user.client.exception;
  * - 需要友好提示用户
  * - 可预期，可恢复
  */
-public class BizException extends BaseException {
+public final class BizException extends BaseException {
 
     private static final long serialVersionUID = 1L;
 

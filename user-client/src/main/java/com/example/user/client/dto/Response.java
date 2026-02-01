@@ -1,82 +1,69 @@
 package com.example.user.client.dto;
 
-import java.io.Serializable;
-
 /**
  * 统一响应对象
+ *
+ * JDK 21 Feature: Record 类 - 不可变数据载体
+ * - 自动生成构造器、getter、equals、hashCode、toString
+ * - 紧凑构造函数用于自定义验证逻辑
  */
-public class Response implements Serializable {
+public record Response<T>(
+    boolean success,
+    String errCode,
+    String errMessage,
+    T data
+) implements java.io.Serializable {
 
     private static final long serialVersionUID = 1L;
 
     /**
-     * 是否成功
+     * JDK 21 Feature: 紧凑构造函数
+     * 用于验证和规范化构造参数
      */
-    private boolean success;
+    public Response {
+        // 成功时不应该有错误码和错误信息
+        if (success && (errCode != null || errMessage != null)) {
+            throw new IllegalArgumentException("Success response cannot have error code or message");
+        }
+        // 失败时必须有错误码
+        if (!success && errCode == null) {
+            throw new IllegalArgumentException("Failure response must have error code");
+        }
+    }
 
     /**
-     * 错误码
+     * 成功响应（无数据）
      */
-    private String errCode;
-
-    /**
-     * 错误信息
-     */
-    private String errMessage;
-
-    /**
-     * 返回数据
-     */
-    private Object data;
-
-    public static Response buildSuccess() {
+    public static Response<Void> buildSuccess() {
         return buildSuccess(null);
     }
 
-    public static Response buildSuccess(Object data) {
-        Response response = new Response();
-        response.setSuccess(true);
-        response.setData(data);
-        return response;
+    /**
+     * 成功响应（带数据）
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Response<T> buildSuccess(T data) {
+        return new Response<>(true, null, null, data);
     }
 
-    public static Response buildFailure(String errCode, String errMessage) {
-        Response response = new Response();
-        response.setSuccess(false);
-        response.setErrCode(errCode);
-        response.setErrMessage(errMessage);
-        return response;
+    /**
+     * 失败响应
+     */
+    public static <T> Response<T> buildFailure(String errCode, String errMessage) {
+        return new Response<>(false, errCode, errMessage, null);
     }
 
-    public boolean isSuccess() {
-        return success;
-    }
-
-    public void setSuccess(boolean success) {
-        this.success = success;
-    }
-
-    public String getErrCode() {
-        return errCode;
-    }
-
-    public void setErrCode(String errCode) {
-        this.errCode = errCode;
-    }
-
-    public String getErrMessage() {
-        return errMessage;
-    }
-
-    public void setErrMessage(String errMessage) {
-        this.errMessage = errMessage;
-    }
-
-    public Object getData() {
+    /**
+     * 泛型友好的获取数据方法
+     */
+    public T data() {
         return data;
     }
 
-    public void setData(Object data) {
-        this.data = data;
+    /**
+     * 向后兼容的 isSuccess 方法
+     */
+    public boolean isSuccess() {
+        return success;
     }
 }

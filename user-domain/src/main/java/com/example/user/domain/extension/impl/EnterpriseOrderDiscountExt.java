@@ -25,11 +25,14 @@ public class EnterpriseOrderDiscountExt implements OrderDiscountExtPt {
         // 计算折扣金额（7折，优惠30%）
         BigDecimal discountAmount = amount.multiply(DISCOUNT_RATE);
 
-        return DiscountResult.builder()
-                .discountType(DiscountResult.DiscountType.PERCENT)
-                .discountRate(DISCOUNT_RATE)
-                .discountAmount(discountAmount)
-                .description("企业用户7折优惠，支持月结账期")
-                .build();
+        return new DiscountResult(
+            discountAmount,
+            "企业用户7折优惠，支持月结账期",
+            DiscountResult.DiscountType.PERCENT,
+            DISCOUNT_RATE,
+            null,
+            null,
+            false
+        );
     }
 }

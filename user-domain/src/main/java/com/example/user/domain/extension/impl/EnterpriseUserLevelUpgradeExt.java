@@ -28,11 +28,12 @@ public class EnterpriseUserLevelUpgradeExt implements LevelUpgradeExtPt {
 
         // 企业用户需要人工审核，不自动升级
         if (totalConsumption.compareTo(new BigDecimal("10000")) >= 0) {
-            return LevelUpgradeResult.builder()
-                    .canUpgrade(false)
-                    .targetLevel("ENTERPRISE_VIP")
-                    .reason("企业用户升级需要人工审核，请提交企业认证申请")
-                    .build();
+            return new LevelUpgradeResult(
+                false,
+                "ENTERPRISE_VIP",
+                "企业用户升级需要人工审核，请提交企业认证申请",
+                null
+            );
         }
 
         return LevelUpgradeResult.notMet("企业用户暂不支持自动升级");
