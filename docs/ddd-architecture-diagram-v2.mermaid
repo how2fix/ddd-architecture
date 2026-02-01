@@ -1,0 +1,519 @@
+classDiagram
+    %% ==========================================
+    %% DDD架构类图 v2.0 - 基于实际代码实现
+    %% ==========================================
+
+    %% ==========================================
+    %% user-start 模块
+    %% ==========================================
+    class UserApplication {
+        <<@SpringBootApplication>>
+        📁 user-start/UserApplication.java
+        +main(args) void
+    }
+
+    %% ==========================================
+    %% user-adapter 模块
+    %% ==========================================
+    class UserController {
+        <<RestController>>
+        📁 user-adapter/web/UserController.java
+        +register(cmd) Response
+        +getById(id) Response
+        +health() Response
+    }
+
+    class GlobalExceptionHandler {
+        <<RestControllerAdvice>>
+        📁 user-adapter/exception/GlobalExceptionHandler.java
+        +handleBizException(e) Response
+        +handleValidationException(e) Response
+    }
+
+    %% ==========================================
+    %% user-client 模块
+    %% ==========================================
+    class UserServiceI {
+        <<interface>>
+        📁 user-client/api/UserServiceI.java
+        +register(cmd) Response
+        +getById(qry) Response
+    }
+
+    class UserRegisterCmd {
+        <<Command>>
+        📁 user-client/dto/cmd/UserRegisterCmd.java
+        +String username
+        +String email
+        +String password
+        +String phone
+        +Boolean sendEmail
+        +Boolean sendSms
+    }
+
+    class UserByIdQry {
+        <<Query>>
+        📁 user-client/dto/query/UserByIdQry.java
+        +Long userId
+    }
+
+    class UserDTO {
+        📁 user-client/dto/UserDTO.java
+        +Long id
+        +String username
+        +String email
+        +String phone
+        +String status
+        +LocalDateTime registerTime
+    }
+
+    class Response~T~ {
+        📁 user-client/dto/Response.java
+        +boolean success
+        +String errCode
+        +String errMessage
+        +T data
+        +buildSuccess(data) Response
+        +buildFailure(errCode, errMsg) Response
+    }
+
+    class ErrorCode {
+        <<enumeration>>
+        📁 user-client/exception/ErrorCode.java
+        PARAM_INVALID
+        EMAIL_FORMAT_ERROR
+        USER_NOT_FOUND
+        EMAIL_ALREADY_EXISTS
+        SYSTEM_ERROR
+    }
+
+    class BizException {
+        📁 user-client/exception/BizException.java
+        +of(errCode, errMsg) BizException
+        +of(errorCode) BizException
+    }
+
+    class SysException {
+        📁 user-client/exception/SysException.java
+        +wrap(errCode, cause) SysException
+    }
+
+    class UserStatus {
+        <<enumeration>>
+        📁 user-client/constant/UserStatus.java
+        INACTIVE
+        ACTIVE
+        FROZEN
+    }
+
+    %% ==========================================
+    %% user-app 模块
+    %% ==========================================
+    class UserApplicationService {
+        <<Service>>
+        📁 user-app/UserApplicationService.java
+        -userRegisterCmdExe UserRegisterCmdExe
+        -userByIdQryExe UserByIdQryExe
+        +register(cmd) Response
+        +getById(qry) Response
+    }
+
+    class UserRegisterCmdExe {
+        <<Component>>
+        📁 user-app/executor/UserRegisterCmdExe.java
+        @Transactional
+        -userRepository IUserRepository
+        -emailGateway IEmailGateway
+        -smsGateway ISmsGateway
+        -userDomainService UserDomainService
+        +execute(cmd) Response
+        -validate(cmd) void
+        -buildUser(cmd) User
+        -sendNotifications(cmd, user) void
+    }
+
+    class UserRegisterCmdExeWithExtension {
+        <<Component>>
+        📁 user-app/executor/UserRegisterCmdExeWithExtension.java
+        @Transactional
+        -extensionExecutor ExtensionExecutor
+        -userRepository IUserRepository
+        +execute(cmd, bizScenario) Response
+    }
+
+    class UserByIdQryExe {
+        <<Component>>
+        📁 user-app/executor/UserByIdQryExe.java
+        -userRepository IUserRepository
+        -assembler UserAssembler
+        +execute(qry) Response
+    }
+
+    class UserAssembler {
+        <<Component>>
+        📁 user-app/assembler/UserAssembler.java
+        +toDTO(user) UserDTO
+        +toFullDTO(user) UserDTO
+        +toDomain(cmd) User
+        +toDTOList(users) List~UserDTO~
+        +getMaskedPhone(phone) String
+        +getMaskedEmail(email) String
+    }
+
+    %% ==========================================
+    %% user-domain 模块 - 模型
+    %% ==========================================
+    class User {
+        <<AggregateRoot>>
+        📁 user-domain/model/User.java
+        -Long id
+        -String username
+        -Email email
+        -Phone phone
+        -String password
+        -UserStatus status
+        -LocalDateTime registerTime
+        -LocalDateTime lastActiveTime
+        +register(encryptedPassword) void
+        +activate() void
+        +freeze() void
+        +changeEmail(newEmail) void
+        +updateLastActiveTime() void
+        +canActivate() boolean
+        +isFrozen() boolean
+    }
+
+    class Email {
+        <<ValueObject>>
+        📁 user-domain/model/Email.java
+        -EMAIL_PATTERN Pattern
+        -String value
+        +Email(value)
+        +isValid(value) boolean
+        +getValue() String
+    }
+
+    class Phone {
+        <<ValueObject>>
+        📁 user-domain/model/Phone.java
+        -PHONE_PATTERN Pattern
+        -String value
+        +Phone(value)
+        +isValid(value) boolean
+        +getValue() String
+    }
+
+    %% ==========================================
+    %% user-domain 模块 - 领域服务
+    %% ==========================================
+    class UserDomainService {
+        <<Service>>
+        📁 user-domain/service/UserDomainService.java
+        -userRepository IUserRepository
+        +isEmailExists(email) boolean
+        +isPhoneExists(phone) boolean
+        +isUsernameExists(username) boolean
+        +encryptPassword(plainPassword) String
+        +verifyPassword(plain, encrypted) boolean
+    }
+
+    %% ==========================================
+    %% user-domain 模块 - 仓储接口
+    %% ==========================================
+    class IUserRepository {
+        <<interface>>
+        📁 user-domain/gateway/IUserRepository.java
+        +save(user) User
+        +findById(id) User
+        +findByEmail(email) User
+        +findByPhone(phone) User
+        +findByUsername(username) User
+        +update(user) User
+        +delete(id) void
+    }
+
+    class IEmailGateway {
+        <<interface>>
+        📁 user-domain/gateway/IEmailGateway.java
+        +sendWelcomeEmail(to, username) boolean
+        +sendVerifyEmail(to, code) boolean
+    }
+
+    class ISmsGateway {
+        <<interface>>
+        📁 user-domain/gateway/ISmsGateway.java
+        +sendRegisterSms(to, username) boolean
+        +sendVerifyCode(to, code) boolean
+    }
+
+    %% ==========================================
+    %% user-domain 模块 - 扩展点机制
+    %% ==========================================
+    class ExtensionPointI {
+        <<interface>>
+        📁 user-domain/extension/ExtensionPointI.java
+    }
+
+    class Extension {
+        <<annotation>>
+        📁 user-domain/extension/Extension.java
+        +bizId() String
+        +useCase() String
+        +scenario() String
+        +description() String
+    }
+
+    class BizScenario {
+        📁 user-domain/extension/BizScenario.java
+        -String bizId
+        -String useCase
+        -String scenario
+        +valueOf(bizId) BizScenario
+        +valueOf(bizId, useCase) BizScenario
+        +matches(bizId, useCase, scenario) boolean
+    }
+
+    class ExtensionExecutor {
+        <<Component>>
+        📁 user-domain/extension/ExtensionExecutor.java
+        -extensionCache Map
+        +execute(extensionPoint, scenario, invoker) R
+        +executeVoid(extensionPoint, scenario, invoker) void
+        +getExtension(extensionPoint, scenario) T
+    }
+
+    class UserValidatorExtPt {
+        <<interface>>
+        📁 user-domain/extension/UserValidatorExtPt.java
+        +validate(user, scenario) void
+    }
+
+    class UserRegisterBonusExtPt {
+        <<interface>>
+        📁 user-domain/extension/UserRegisterBonusExtPt.java
+        +calculateBonus(userId, scenario) BigDecimal
+    }
+
+    class LevelUpgradeExtPt {
+        <<interface>>
+        📁 user-domain/extension/LevelUpgradeExtPt.java
+        +upgrade(userId, scenario) LevelUpgradeResult
+    }
+
+    class RiskCheckExtPt {
+        <<interface>>
+        📁 user-domain/extension/RiskCheckExtPt.java
+        +check(context) RiskCheckResult
+    }
+
+    class PointCalculateExtPt {
+        <<interface>>
+        📁 user-domain/extension/PointCalculateExtPt.java
+        +calculate(userId, amount) BigDecimal
+    }
+
+    class NotificationChannelExtPt {
+        <<interface>>
+        📁 user-domain/extension/NotificationChannelExtPt.java
+        +getChannels(user) List~String~
+    }
+
+    class OrderDiscountExtPt {
+        <<interface>>
+        📁 user-domain/extension/OrderDiscountExtPt.java
+        +calculateDiscount(order) DiscountResult
+    }
+
+    class RegisterValidatorExtPt {
+        <<interface>>
+        📁 user-domain/extension/RegisterValidatorExtPt.java
+        +validate(cmd) void
+    }
+
+    %% 扩展点实现
+    class DefaultUserValidatorExt {
+        <<@Extension bizId=DEFAULT>>
+        📁 user-domain/extension/impl/DefaultUserValidatorExt.java
+        +validate(user, scenario) void
+    }
+
+    class VipUserValidatorExt {
+        <<@Extension bizId=VIP>>
+        📁 user-domain/extension/impl/VipUserValidatorExt.java
+        +validate(user, scenario) void
+    }
+
+    class DefaultUserRegisterBonusExt {
+        <<@Extension bizId=DEFAULT>>
+        📁 user-domain/extension/impl/DefaultUserRegisterBonusExt.java
+        +calculateBonus(userId, scenario) BigDecimal
+    }
+
+    class VipUserRegisterBonusExt {
+        <<@Extension bizId=VIP>>
+        📁 user-domain/extension/impl/VipUserRegisterBonusExt.java
+        +calculateBonus(userId, scenario) BigDecimal
+    }
+
+    %% ==========================================
+    %% user-infrastructure 模块
+    %% ==========================================
+    class UserRepositoryImpl {
+        <<Repository>>
+        📁 user-infrastructure/gatewayimpl/UserRepositoryImpl.java
+        -userMapper UserMapper
+        -userConverter UserConverter
+        +save(user) User
+        +findById(id) User
+        +findByEmail(email) User
+        +findByPhone(phone) User
+        +findByUsername(username) User
+        +update(user) User
+        +delete(id) void
+    }
+
+    class EmailGatewayImpl {
+        <<Component>>
+        📁 user-infrastructure/gatewayimpl/EmailGatewayImpl.java
+        +sendWelcomeEmail(to, username) boolean
+        +sendVerifyEmail(to, code) boolean
+    }
+
+    class SmsGatewayImpl {
+        <<Component>>
+        📁 user-infrastructure/gatewayimpl/SmsGatewayImpl.java
+        +sendRegisterSms(to, username) boolean
+        +sendVerifyCode(to, code) boolean
+    }
+
+    class UserMapper {
+        <<MyBatis Mapper>>
+        📁 user-infrastructure/mapper/UserMapper.java
+        +insert(po) int
+        +selectById(id) UserPO
+        +updateById(po) int
+        +deleteById(id) int
+    }
+
+    class UserPO {
+        <<TableName=user>>
+        📁 user-infrastructure/dataobject/UserPO.java
+        +Long id
+        +String username
+        +String email
+        +String phone
+        +String password
+        +String status
+        +LocalDateTime registerTime
+        +LocalDateTime lastActiveTime
+    }
+
+    class UserConverter {
+        <<Component>>
+        📁 user-infrastructure/converter/UserConverter.java
+        +toDataObject(user) UserPO
+        +toDomain(po) User
+    }
+
+    %% ==========================================
+    %% 模块分组
+    %% ==========================================
+    class UserStartModule {
+        <<module>> 🚀 user-start
+    }
+
+    class UserAdapterModule {
+        <<module>> 📱 user-adapter
+    }
+
+    class UserClientModule {
+        <<module>> 📋 user-client
+    }
+
+    class UserAppModule {
+        <<module>> ⚙️ user-app
+    }
+
+    class UserDomainModule {
+        <<module>> 💎 user-domain
+    }
+
+    class UserInfraModule {
+        <<module>> 🔧 user-infrastructure
+    }
+
+    %% ==========================================
+    %% 关系定义
+    %% ==========================================
+
+    %% user-start
+    UserStartModule ..> UserAdapterModule : 依赖
+    UserStartModule ..> UserAppModule : 扫描
+    UserStartModule ..> UserInfraModule : 扫描
+
+    %% user-adapter
+    UserAdapterModule --> UserClientModule : 依赖
+    UserAdapterModule --> UserAppModule : 依赖
+    UserController --> UserServiceI : uses
+    UserController --> UserRegisterCmd : @Valid
+    UserController --> Response : returns
+    GlobalExceptionHandler --> BizException : catches
+    GlobalExceptionHandler --> SysException : catches
+
+    %% user-client
+    UserServiceI ..> UserRegisterCmd
+    UserServiceI ..> UserByIdQry
+    UserServiceI ..> UserDTO
+    BizException --> ErrorCode : uses
+
+    %% user-app
+    UserAppModule --> UserClientModule : 依赖
+    UserAppModule --> UserDomainModule : 依赖
+    UserApplicationService --> UserRegisterCmdExe : delegates
+    UserApplicationService --> UserByIdQryExe : delegates
+    UserRegisterCmdExe ..> IUserRepository : uses
+    UserRegisterCmdExe ..> IEmailGateway : uses
+    UserRegisterCmdExe ..> ISmsGateway : uses
+    UserRegisterCmdExe ..> User : uses
+    UserRegisterCmdExe ..> UserDomainService : uses
+    UserRegisterCmdExeWithExtension ..> ExtensionExecutor : uses
+    UserRegisterCmdExeWithExtension ..> IUserRepository : uses
+    UserByIdQryExe ..> IUserRepository : uses
+    UserByIdQryExe --> UserAssembler : uses
+
+    %% user-domain
+    UserDomainModule --> UserClientModule : 依赖
+    User *-- Email : contains
+    User *-- Phone : contains
+    User *-- UserStatus : contains
+    UserDomainService ..> IUserRepository : uses
+
+    %% 扩展点关系
+    UserValidatorExtPt --|> ExtensionPointI
+    UserRegisterBonusExtPt --|> ExtensionPointI
+    LevelUpgradeExtPt --|> ExtensionPointI
+    RiskCheckExtPt --|> ExtensionPointI
+    PointCalculateExtPt --|> ExtensionPointI
+    NotificationChannelExtPt --|> ExtensionPointI
+    OrderDiscountExtPt --|> ExtensionPointI
+    RegisterValidatorExtPt --|> ExtensionPointI
+
+    DefaultUserValidatorExt ..|> UserValidatorExtPt
+    VipUserValidatorExt ..|> UserValidatorExtPt
+    DefaultUserRegisterBonusExt ..|> UserRegisterBonusExtPt
+    VipUserRegisterBonusExt ..|> UserRegisterBonusExtPt
+
+    DefaultUserValidatorExt ..> Extension
+    VipUserValidatorExt ..> Extension
+    ExtensionExecutor --> BizScenario : uses
+
+    %% user-infrastructure
+    UserInfraModule --> UserClientModule : 依赖
+    UserInfraModule --> UserDomainModule : 依赖
+    UserRepositoryImpl ..|> IUserRepository : implements
+    EmailGatewayImpl ..|> IEmailGateway : implements
+    SmsGatewayImpl ..|> ISmsGateway : implements
+    UserRepositoryImpl --> UserMapper : uses
+    UserRepositoryImpl --> UserConverter : uses
+    UserMapper --> UserPO : operates on
+    UserConverter --> UserPO : converts

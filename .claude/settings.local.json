@@ -3,7 +3,12 @@
     "allow": [
       "Bash(mvn validate:*)",
       "Bash(dir:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(mvn compile:*)",
+      "Bash(mvn:*)",
+      "Bash(java:*)",
+      "Bash(javac:*)",
+      "Bash(del:*)"
     ]
   }
 }

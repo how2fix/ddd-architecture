@@ -1,0 +1,214 @@
+sequenceDiagram
+    %% ==========================================
+    %% 用户注册时序图 v2.0 - 基于实际代码实现
+    %% ==========================================
+
+    autonumber
+    participant Client as 客户端<br/>━━━━━━━<br/>Postman/Browser
+    participant Controller as UserController<br/>━━━━━━━<br/>📁 user-adapter/web/<br/>UserController.java
+    participant AppService as UserApplicationService<br/>━━━━━━━<br/>📁 user-app/<br/>UserApplicationService.java
+    participant CmdExe as UserRegisterCmdExe<br/>━━━━━━━<br/>📁 user-app/executor/<br/>UserRegisterCmdExe.java
+    participant User as User聚合根<br/>━━━━━━━<br/>📁 user-domain/model/<br/>User.java
+    participant DomainService as UserDomainService<br/>━━━━━━━<br/>📁 user-domain/service/<br/>UserDomainService.java
+    participant Repo as UserRepositoryImpl<br/>━━━━━━━<br/>📁 user-infrastructure/<br/>gatewayimpl/<br/>UserRepositoryImpl.java
+    participant Converter as UserConverter<br/>━━━━━━━<br/>📁 user-infrastructure/<br/>converter/<br/>UserConverter.java
+    participant Mapper as UserMapper<br/>━━━━━━━<br/>📁 user-infrastructure/<br/>mapper/<br/>UserMapper.java
+    participant DB as 数据库(H2)<br/>━━━━━━━<br/>user表
+    participant EmailGW as EmailGatewayImpl<br/>━━━━━━━<br/>📁 user-infrastructure/<br/>gatewayimpl/<br/>EmailGatewayImpl.java
+    participant SmsGW as SmsGatewayImpl<br/>━━━━━━━<br/>📁 user-infrastructure/<br/>gatewayimpl/<br/>SmsGatewayImpl.java
+
+    rect rgb(225, 245, 255)
+        Note over Client,SmsGW: 🔵 正常注册流程
+
+        Client->>Controller: POST /api/users/register<br/>{"username": "test", "email": "test@example.com"}
+        Note over Controller: @Valid 参数校验<br/>UserRegisterCmd
+
+        Controller->>AppService: register(UserRegisterCmd)
+        AppService->>CmdExe: execute(cmd)
+
+        activate CmdExe
+        Note over CmdExe: @Transactional 事务开始
+
+        CmdExe->>CmdExe: 1. validate(cmd)
+        Note over CmdExe: 邮箱格式校验<br/>手机号格式校验
+
+        CmdExe->>DomainService: isEmailExists(email)
+        DomainService->>Repo: findByEmail(email)
+        Repo->>Mapper: selectByEmail(email)
+        Mapper->>DB: SELECT * FROM user WHERE email = ?
+        DB-->>Mapper: null
+        Mapper-->>Repo: null
+        Repo-->>DomainService: null (邮箱不存在)
+        DomainService-->>CmdExe: false
+
+        CmdExe->>DomainService: isPhoneExists(phone)
+        DomainService->>Repo: findByPhone(phone)
+        Repo->>Mapper: selectByPhone(phone)
+        Mapper->>DB: SELECT * FROM user WHERE phone = ?
+        DB-->>Mapper: null
+        Mapper-->>Repo: null
+        Repo-->>DomainService: null
+        DomainService-->>CmdExe: false
+
+        CmdExe->>CmdExe: 2. buildUser(cmd)
+        Note over CmdExe: 创建Email值对象<br/>创建Phone值对象<br/>自动校验格式
+
+        CmdExe->>DomainService: encryptPassword(password)
+        Note over DomainService: BCrypt加密算法
+        DomainService-->>CmdExe: BCrypt加密后的密码
+
+        CmdExe->>User: new User(id, username, email, phone)
+        activate User
+        User->>User: Email值对象构造(自校验)
+        User->>User: Phone值对象构造(自校验)
+
+        CmdExe->>User: register(encryptedPassword)
+        Note over User: 设置status=INACTIVE<br/>设置password=加密后<br/>设置registerTime=now()
+        User-->>CmdExe: void
+        deactivate User
+
+        CmdExe->>Repo: save(user)
+        Repo->>Converter: toDataObject(user)
+        Note over Converter: Domain → UserPO<br/>处理Email/Phone值对象
+        Converter-->>Repo: UserPO
+
+        Repo->>Mapper: insert(UserPO)
+        Mapper->>DB: INSERT INTO user<br/>(username, email, phone, password, status)<br/>VALUES (?, ?, ?, ?, ?)
+        DB-->>Mapper: 自增ID
+        Mapper-->>Repo: UserPO(with ID)
+        Repo-->>CmdExe: User (with ID)
+
+        CmdExe->>CmdExe: 5. sendNotifications(cmd, user)
+
+        alt cmd.sendEmail == true
+            CmdExe->>EmailGW: sendWelcomeEmail(email, username)
+            Note over EmailGW: 防腐层<br/>记录日志<br/>模拟发送
+            EmailGW-->>CmdExe: true
+        end
+
+        alt cmd.sendSms == true
+            CmdExe->>SmsGW: sendRegisterSms(phone, username)
+            Note over SmsGW: 防腐层<br/>记录日志<br/>模拟发送
+            SmsGW-->>CmdExe: true
+        end
+
+        Note over CmdExe: @Transactional 事务提交
+
+        CmdExe-->>AppService: Response(success=true, data=userId)
+        deactivate CmdExe
+
+        AppService-->>Controller: Response
+        Controller-->>Client: {"success": true, "data": "1"}
+    end
+
+    %% ==========================================
+    %% 扩展点执行流程
+    %% ==========================================
+
+    rect rgb(241, 248, 255)
+        Note over Client,SmsGW: 🟣 扩展点执行流程 (UserRegisterCmdExeWithExtension)
+
+        participant ExtExec as ExtensionExecutor<br/>━━━━━━━<br/>📁 user-domain/extension/<br/>ExtensionExecutor.java
+        participant VipValidator as VipUserValidatorExt<br/>━━━━━━━<br/>📁 impl/VipUserValidatorExt.java
+        participant VipBonus as VipUserRegisterBonusExt<br/>━━━━━━━<br/>📁 impl/VipUserRegisterBonusExt.java
+
+        Client->>Controller: POST /api/users/register (VIP用户)
+        Controller->>AppService: register(cmd, VIP)
+        AppService->>CmdExe: execute(cmd, BizScenario.VIP.register)
+
+        CmdExe->>ExtExec: executeVoid(UserValidatorExtPt, VIP)
+        Note over ExtExec: 查找@Extension(bizId=VIP)
+        ExtExec->>VipValidator: validate(user, VIP)
+        Note over VipValidator: VIP用户校验规则<br/>━━━━━━━<br/>• 用户名≥5字符<br/>• 必须有手机号<br/>• 必须是企业邮箱<br/>(*.company.com)
+        VipValidator-->>ExtExec: 校验通过
+        ExtExec-->>CmdExe: void
+
+        CmdExe->>User: register(encryptedPassword)
+        User-->>CmdExe: void
+
+        CmdExe->>Repo: save(user)
+        Repo-->>CmdExe: User(with ID)
+
+        CmdExe->>ExtExec: execute(UserRegisterBonusExtPt, VIP)
+        Note over ExtExec: 查找@Extension(bizId=VIP)
+        ExtExec->>VipBonus: calculateBonus(userId, VIP)
+        Note over VipBonus: VIP用户注册奖金<br/>返回 100.00
+        VipBonus-->>ExtExec: BigDecimal(100.00)
+        ExtExec-->>CmdExe: 100.00
+
+        CmdExe-->>AppService: Response
+        AppService-->>Controller: Response
+        Controller-->>Client: {"success": true, "data": "1"}
+    end
+
+    %% ==========================================
+    %% 异常处理流程
+    %% ==========================================
+
+    rect rgb(255, 240, 240)
+        Note over Client,SmsGW: 🔴 异常处理流程
+
+        participant GlobalExcep as GlobalExceptionHandler<br/>━━━━━━━<br/>📁 user-adapter/exception/<br/>GlobalExceptionHandler.java
+
+        Client->>Controller: POST /api/users/register (邮箱已存在)
+        Controller->>AppService: register(cmd)
+        AppService->>CmdExe: execute(cmd)
+
+        CmdExe->>DomainService: isEmailExists(email)
+        DomainService->>Repo: findByEmail(email)
+        Repo->>DB: SELECT * FROM user WHERE email = ?
+        DB-->>Repo: UserPO(已存在)
+        Repo-->>DomainService: User
+        DomainService-->>CmdExe: true
+
+        CmdExe->>CmdExe: throw BizException(EMAIL_ALREADY_EXISTS)
+
+        CmdExe-->>AppService: BizException
+        AppService-->>Controller: BizException
+
+        Controller->>GlobalExcep: handleBizException(e)
+        Note over GlobalExcep: 捕获业务异常<br/>返回错误码和错误信息
+        GlobalExcep-->>Controller: Response(success=false, errCode="EMAIL_EXISTS")
+        Controller-->>Client: {"success": false, "errCode": "EMAIL_EXISTS", "errMessage": "邮箱已存在"}
+    end
+
+    %% ==========================================
+    %% 依赖倒置示意
+    %% ==========================================
+
+    rect rgb(232, 245, 233)
+        Note over Client,SmsGW: 🟢 依赖倒置原则 (DIP) 示意
+
+        participant IDomain as Domain层<br/>━━━━━━━<br/>📁 user-domain/gateway/<br/>IUserRepository.java (接口定义)
+        participant IInfra as Infrastructure层<br/>━━━━━━━<br/>📁 user-infrastructure/<br/>gatewayimpl/<br/>UserRepositoryImpl.java (实现)
+
+        Note over IDomain,IInfra: Domain层定义接口<br/>Infrastructure层实现接口<br/>依赖方向: Infra → Domain
+
+        CmdExe->>IDomain: save(user) - 调用接口
+        IDomain->>IInfra: 接口被实现
+        IInfra->>DB: 实际数据库操作
+
+        Note over IDomain,IInfra: ✅ 依赖倒置实现<br/>高层模块(Domain)不依赖低层模块(Infrastructure)<br/>两者都依赖抽象(IUserRepository接口)
+    end
+
+    %% ==========================================
+    %% 模块调用层次
+    %% ==========================================
+
+    rect rgb(250, 243, 240)
+        Note over Client,SmsGW: 🟠 模块调用层次总结
+
+        participant LayerAdapter as Adapter层<br/>━━━━━━━<br/>user-adapter
+        participant LayerApp as Application层<br/>━━━━━━━<br/>user-app
+        participant LayerDomain as Domain层<br/>━━━━━━━<br/>user-domain
+        participant LayerInfra as Infrastructure层<br/>━━━━━━━<br/>user-infrastructure
+
+        Note over LayerAdapter,LayerInfra: 调用顺序 (从外到内)
+
+        LayerAdapter->>LayerApp: 1️⃣ HTTP请求 → Application
+        LayerApp->>LayerDomain: 2️⃣ 流程编排 → 领域逻辑
+        LayerDomain->>LayerInfra: 3️⃣ 接口调用 → 技术实现
+        LayerInfra->>LayerInfra: 4️⃣ 数据库操作
+
+        Note over LayerAdapter,LayerInfra: 依赖关系 (反向)<br/>user-adapter → user-app → user-domain<br/>user-app → user-infrastructure → user-domain
+    end

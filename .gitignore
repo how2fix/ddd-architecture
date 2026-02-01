@@ -10,4 +10,4 @@
 /dataSources.local.xml
 /.idea/**
 /**/logs/**
-/**/target/**/
+/**/target/**

@@ -1,0 +1,293 @@
+graph TB
+    %% ==========================================
+    %% 整体架构视图 v2.0 - 基于实际代码实现
+    %% ==========================================
+
+    subgraph External["🌍 外部世界"]
+        HTTP["HTTP请求<br/>POST /api/users/register<br/>GET /api/users/{id}"]
+        MQ["消息队列<br/>OrderCreatedEvent<br/>(预留扩展)"]
+        Schedule["定时任务<br/>OrderSyncJob<br/>(预留扩展)"]
+    end
+
+    %% ==========================================
+    %% user-start 模块
+    %% ==========================================
+    subgraph StartModule["🚀 user-start 模块"]
+        style StartModule fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+
+        StartApp["UserApplication.java<br/>━━━━━━━<br/>@SpringBootApplication<br/>+ main(args)"]
+
+        StartCfg["application.yml<br/>━━━━━━━<br/>server.port: 8080<br/>spring.datasource.url: jdbc:h2:mem:user_db"]
+    end
+
+    %% ==========================================
+    %% Adapter Layer (适配层)
+    %% ==========================================
+    subgraph Layer1["📱 Adapter Layer - 适配层"]
+        direction LR
+        style Layer1 fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+
+        subgraph AdapterBox["职责: 协议转换 & 参数校验"]
+            Controller["UserController<br/>━━━━━━━<br/>📁 adapter/web/UserController.java<br/>━━━━━━━<br/>• register(@Valid cmd)<br/>• getById(@PathVariable id)<br/>• health()"]
+
+            Listener["OrderEventListener<br/>━━━━━━━<br/>📁 adapter/mq/EventListener.java<br/>━━━━━━━<br/>• onOrderCreated()<br/>(预留扩展)"]
+
+            Job["OrderSyncJob<br/>━━━━━━━<br/>📁 adapter/job/SyncJob.java<br/>━━━━━━━<br/>• syncOrders()<br/>(预留扩展)"]
+        end
+
+        Exception["GlobalExceptionHandler<br/>━━━━━━━<br/>📁 adapter/exception/<br/>GlobalExceptionHandler.java<br/>━━━━━━━<br/>• handleBizException()<br/>• handleValidationException()"]
+
+        AdapterModule["📦 user-adapter 模块<br/>━━━━━━━<br/>依赖: user-client, user-app"]
+
+        AdapterPrinciple["✅ 隔离外部协议<br/>✅ 统一接入标准<br/>✅ @Valid参数校验<br/>✅ 薄薄一层无业务逻辑"]
+    end
+
+    %% ==========================================
+    %% Client API (对外契约)
+    %% ==========================================
+    subgraph ClientAPI["📋 Client API - 对外契约"]
+        direction TB
+        style ClientAPI fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+        subgraph InterfaceBox["接口定义"]
+            ServiceI["UserServiceI<br/>━━━━━━━<br/>📁 api/UserServiceI.java<br/>━━━━━━━<br/>• register(cmd)<br/>• getById(qry)"]
+        end
+
+        subgraph DTOBox["数据传输对象"]
+            DTO["UserDTO<br/>━━━━━━━<br/>📁 dto/UserDTO.java<br/>━━━━━━━<br/>• id, username<br/>• email, phone(脱敏)<br/>• status, registerTime"]
+        end
+
+        subgraph CQRSBox["CQRS模式"]
+            Command["UserRegisterCmd<br/>━━━━━━━<br/>📁 dto/cmd/UserRegisterCmd.java<br/>━━━━━━━<br/>• username, email<br/>• password, phone<br/>• sendEmail, sendSms"]
+
+            Query["UserByIdQry<br/>━━━━━━━<br/>📁 dto/query/UserByIdQry.java<br/>━━━━━━━<br/>• userId"]
+        end
+
+        subgraph ExceptionBox["异常体系"]
+            BizExc["BizException<br/>━━━━━━━<br/>📁 exception/BizException.java"]
+
+            SysExc["SysException<br/>━━━━━━━<br/>📁 exception/SysException.java"]
+
+            ErrCode["ErrorCode<br/>━━━━━━━<br/>📁 exception/ErrorCode.java<br/>━━━━━━━<br/>PARAM_INVALID<br/>EMAIL_ALREADY_EXISTS<br/>USER_NOT_FOUND"]
+        end
+
+        ClientModule["📦 user-client 模块<br/>━━━━━━━<br/>被所有层依赖"]
+
+        ClientPrinciple["✅ 所有层依赖Client<br/>✅ 定义API契约<br/>✅ DTO/Command/Query分离"]
+    end
+
+    %% ==========================================
+    %% Application Layer (应用层)
+    %% ==========================================
+    subgraph Layer2["⚙️ Application Layer - 应用层"]
+        direction LR
+        style Layer2 fill:#fff3e0,stroke:#e65100,stroke-width:3px
+
+        subgraph AppBox["职责: 流程编排 & 用例实现"]
+            AppService["UserApplicationService<br/>━━━━━━━<br/>📁 app/UserApplicationService.java<br/>━━━━━━━<br/>应用服务门面<br/>• register(cmd)<br/>• getById(qry)"]
+
+            CmdExe["UserRegisterCmdExe<br/>━━━━━━━<br/>📁 app/executor/<br/>UserRegisterCmdExe.java<br/>━━━━━━━<br/>@Transactional<br/>• execute(cmd)<br/>━━━━━━━<br/>1.validate() 邮箱/手机校验<br/>2.buildUser() 构建领域对象<br/>3.user.register() 业务逻辑<br/>4.save() 保存聚合根<br/>5.sendNotifications() 发送通知"]
+
+            CmdExeExt["UserRegisterCmdExeWithExtension<br/>━━━━━━━<br/>📁 app/executor/<br/>UserRegisterCmdExeWithExtension.java<br/>━━━━━━━<br/>支持扩展点<br/>• execute(cmd, bizScenario)<br/>━━━━━━━<br/>使用ExtensionExecutor"]
+
+            QryExe["UserByIdQryExe<br/>━━━━━━━<br/>📁 app/executor/<br/>UserByIdQryExe.java<br/>━━━━━━━<br/>• execute(qry)"]
+
+            Assembler["UserAssembler<br/>━━━━━━━<br/>📁 app/assembler/<br/>UserAssembler.java<br/>━━━━━━━<br/>• toDTO(user) 脱敏转换<br/>• toDomain(cmd) 转领域对象<br/>• getMaskedPhone/Email() 脱敏"]
+
+            Transaction["🔄 事务边界<br/>@Transactional"]
+        end
+
+        AppModule["📦 user-app 模块<br/>━━━━━━━<br/>依赖: user-client, user-domain"]
+
+        AppPrinciple["✅ 无业务逻辑<br/>✅ 编排Domain对象<br/>✅ 控制事务边界<br/>✅ DTO与Domain转换"]
+    end
+
+    %% ==========================================
+    %% Domain Layer (领域层) - 核心
+    %% ==========================================
+    subgraph Layer3["💎 Domain Layer - 领域层 ⭐核心⭐"]
+        direction TB
+        style Layer3 fill:#e8f5e9,stroke:#1b5e20,stroke-width:4px
+
+        subgraph DomainBox["职责: 业务规则 & 核心逻辑"]
+            subgraph AggregateBox["聚合 Aggregate"]
+                User["User 聚合根<br/>━━━━━━━<br/>📁 domain/model/User.java<br/>━━━━━━━<br/>字段: id, username<br/>email(Email值对象)<br/>phone(Phone值对象)<br/>password, status<br/>registerTime, lastActiveTime<br/>━━━━━━━<br/>业务方法:<br/>• register(encryptedPwd)<br/>• activate() 冻结用户不能激活<br/>• freeze() 状态=FROZEN<br/>• changeEmail(newEmail)<br/>  冻结用户不能修改"]
+            end
+
+            subgraph ValueObjectBox["值对象 ValueObject"]
+                Email["Email<br/>━━━━━━━<br/>📁 domain/model/Email.java<br/>━━━━━━━<br/>• EMAIL_PATTERN正则校验<br/>• isValid(value) 静态校验<br/>• 构造时自动校验格式"]
+
+                Phone["Phone<br/>━━━━━━━<br/>📁 domain/model/Phone.java<br/>━━━━━━━<br/>• PHONE_PATTERN正则校验<br/>• isValid(value) 静态校验<br/>• 构造时自动校验格式"]
+
+                Status["UserStatus<br/>━━━━━━━<br/>📁 client/constant/UserStatus.java<br/>━━━━━━━<br/>• INACTIVE 未激活<br/>• ACTIVE 正常<br/>• FROZEN 冻结"]
+            end
+
+            subgraph ServiceBox["领域服务 DomainService"]
+                DomainService["UserDomainService<br/>━━━━━━━<br/>📁 domain/service/<br/>UserDomainService.java<br/>━━━━━━━<br/>• isEmailExists(email)<br/>• isPhoneExists(phone)<br/>• encryptPassword(pwd) BCrypt<br/>• verifyPassword(input, enc)"]
+            end
+
+            subgraph InterfaceBox["仓储接口 (防腐层)"]
+                IRepository["IUserRepository<br/>━━━━━━━<br/>📁 domain/gateway/<br/>IUserRepository.java<br/>━━━━━━━<br/>• save(user) User<br/>• findById(id) User<br/>• findByEmail/Phone/Username()<br/>• update(user) User<br/>• delete(id)"]
+
+                IEmail["IEmailGateway<br/>━━━━━━━<br/>📁 domain/gateway/<br/>IEmailGateway.java<br/>━━━━━━━<br/>• sendWelcomeEmail(to, username)<br/>• sendVerifyEmail(to, code)"]
+
+                ISms["ISmsGateway<br/>━━━━━━━<br/>📁 domain/gateway/<br/>ISmsGateway.java<br/>━━━━━━━<br/>• sendRegisterSms(to, username)<br/>• sendVerifyCode(to, code)"]
+            end
+
+            subgraph ExtensionBox["扩展点机制"]
+                ExtPt["ExtensionPointI<br/>📁 domain/extension/<br/>ExtensionPointI.java<br/>扩展点标记接口"]
+
+                ExtExec["ExtensionExecutor<br/>📁 domain/extension/<br/>ExtensionExecutor.java<br/>━━━━━━━<br/>• execute(extPt, scenario, invoker)<br/>• executeVoid(extPt, scenario, invoker)<br/>• getExtension(extPt, scenario)"]
+
+                ExtBiz["BizScenario<br/>📁 domain/extension/<br/>BizScenario.java<br/>━━━━━━━<br/>• valueOf(bizId)<br/>• valueOf(bizId, useCase)<br/>• matches(bizId, useCase, scenario)"]
+
+                ExtAnn["@Extension<br/>📁 domain/extension/<br/>Extension.java<br/>注解<br/>━━━━━━━<br/>• bizId 业务身份<br/>• useCase 用例<br/>• scenario 场景"]
+
+                ExtList["已实现扩展点:<br/>━━━━━━━<br/>• UserValidatorExtPt<br/>  📁 impl/DefaultUserValidatorExt.java<br/>  📁 impl/VipUserValidatorExt.java<br/>• UserRegisterBonusExtPt<br/>  📁 impl/DefaultUserRegisterBonusExt.java<br/>  📁 impl/VipUserRegisterBonusExt.java<br/>• LevelUpgradeExtPt<br/>  📁 impl/NormalUserLevelUpgradeExt.java<br/>  📁 impl/VipUserLevelUpgradeExt.java<br/>  📁 impl/EnterpriseUserLevelUpgradeExt.java<br/>• RiskCheckExtPt<br/>  📁 impl/*RiskCheckExt.java<br/>• PointCalculateExtPt<br/>  📁 impl/*PointExt.java<br/>• NotificationChannelExtPt<br/>  📁 impl/*NotificationChannelExt.java<br/>• OrderDiscountExtPt<br/>  📁 impl/*OrderDiscountExt.java<br/>• RegisterValidatorExtPt<br/>  📁 impl/*RegisterValidatorExt.java"]
+            end
+        end
+
+        DomainModule["📦 user-domain 模块<br/>━━━━━━━<br/>依赖: user-client"]
+
+        DomainPrinciple["✅ 所有业务规则在此<br/>✅ 充血模型<br/>✅ 完全技术无关<br/>✅ 定义接口不依赖实现<br/>✅ 支持扩展点机制"]
+    end
+
+    %% ==========================================
+    %% Infrastructure Layer (基础设施层)
+    %% ==========================================
+    subgraph Layer4["🔧 Infrastructure Layer - 基础设施层"]
+        direction LR
+        style Layer4 fill:#fce4ec,stroke:#880e4f,stroke-width:3px
+
+        subgraph InfraBox["职责: 技术实现 & 外部集成"]
+            direction TB
+
+            subgraph DBBox["数据持久化"]
+                RepoImpl["UserRepositoryImpl<br/>━━━━━━━<br/>📁 infrastructure/gatewayimpl/<br/>UserRepositoryImpl.java<br/>━━━━━━━<br/>实现 IUserRepository<br/>• save(user) 插入并返回ID<br/>• findById(id) 查询<br/>• findByEmail/Phone/Username()<br/>• 使用LambdaQueryWrapper"]
+
+                Converter["UserConverter<br/>━━━━━━━<br/>📁 infrastructure/converter/<br/>UserConverter.java<br/>━━━━━━━<br/>• toDataObject(user) UserPO<br/>• toDomain(po) User<br/>━━━━━━━<br/>处理Email/Phone值对象转换"]
+
+                Mapper["UserMapper<br/>━━━━━━━<br/>📁 infrastructure/mapper/<br/>UserMapper.java<br/>━━━━━━━<br/>MyBatis Mapper<br/>• insert(po)<br/>• selectById(id)<br/>• updateById(po)"]
+
+                DB[("💾 H2 Database<br/>━━━━━━━<br/>user表<br/>开发环境内存数据库")]
+            end
+
+            subgraph GatewayBox["网关实现 (防腐层)"]
+                EmailGW["EmailGatewayImpl<br/>━━━━━━━<br/>📁 infrastructure/gatewayimpl/<br/>EmailGatewayImpl.java<br/>━━━━━━━<br/>实现 IEmailGateway<br/>• sendWelcomeEmail() 日志记录<br/>• 返回true模拟发送"]
+
+                SmsGW["SmsGatewayImpl<br/>━━━━━━━<br/>📁 infrastructure/gatewayimpl/<br/>SmsGatewayImpl.java<br/>━━━━━━━<br/>实现 ISmsGateway<br/>• sendRegisterSms() 日志记录<br/>• 返回true模拟发送"]
+            end
+
+            subgraph ThirdPartyBox["第三方集成(预留)"]
+                EmailService["📧 第三方邮件服务<br/>(实际项目对接)<br/>SendGrid/阿里云/腾讯云"]
+
+                SMSService["📱 第三方短信服务<br/>(实际项目对接)<br/>阿里云/腾讯云"]
+            end
+        end
+
+        InfraModule["📦 user-infrastructure 模块<br/>━━━━━━━<br/>依赖: user-client, user-domain"]
+
+        InfraPrinciple["✅ 实现Domain接口<br/>✅ 依赖倒置原则<br/>✅ 可替换性<br/>✅ 防腐层隔离第三方"]
+    end
+
+    %% ==========================================
+    %% 模块依赖关系
+    %% ==========================================
+    subgraph ModuleDeps["📦 Maven 模块依赖关系"]
+        style ModuleDeps fill:#f5f5f5,stroke:#424242,stroke-width:2px
+
+        MStart["user-start<br/>━━━━━━━<br/>启动模块"]
+        MAdapter["user-adapter<br/>━━━━━━━<br/>适配层"]
+        MApp["user-app<br/>━━━━━━━<br/>应用层"]
+        MDomain["user-domain<br/>━━━━━━━<br/>领域层"]
+        MInfra["user-infrastructure<br/>━━━━━━━<br/>基础设施层"]
+        MClient["user-client<br/>━━━━━━━<br/>对外契约"]
+
+        MStart --> MAdapter
+        MAdapter --> MApp
+        MApp --> MDomain
+        MApp --> MInfra
+        MInfra --> MClient
+        MDomain --> MClient
+        MAdapter --> MClient
+        MApp --> MClient
+    end
+
+    %% ==========================================
+    %% 数据流转 (请求处理全流程)
+    %% ==========================================
+    HTTP -->|1️⃣ HTTP请求| Controller
+    MQ -->|1️⃣ MQ消息| Listener
+    Schedule -->|1️⃣ 定时触发| Job
+
+    Controller -->|2️⃣ 调用服务<br/>传入@Valid参数| AppService
+    Listener -->|2️⃣ 调用服务| AppService
+    Job -->|2️⃣ 调用服务| AppService
+
+    AppService -->|3️⃣ 委托执行| CmdExe
+    AppService -->|3️⃣ 委托执行| QryExe
+
+    CmdExe -->|4️⃣ 使用| Assembler
+    CmdExe -->|4️⃣ 调用业务规则| User
+    CmdExe -->|4️⃣ 调用领域服务| DomainService
+    CmdExe -->|5️⃣ 依赖接口| IRepository
+    CmdExe -->|5️⃣ 依赖接口| IEmail
+    CmdExe -->|5️⃣ 依赖接口| ISms
+
+    CmdExeExt -->|4️⃣ 使用扩展点| ExtExec
+    ExtExec -->|5️⃣ 查找扩展点实现| ExtBiz
+
+    QryExe -->|4️⃣ 使用| Assembler
+    QryExe -->|4️⃣ 依赖接口| IRepository
+
+    DomainService -->|依赖接口| IRepository
+
+    %% Infrastructure实现接口 (依赖倒置!)
+    IRepository <-.->|6️⃣ 实现| RepoImpl
+    IEmail <-.->|6️⃣ 实现| EmailGW
+    ISms <-.->|6️⃣ 实现| SmsGW
+
+    RepoImpl -->|7️⃣ 数据访问| Mapper
+    Mapper -->|操作| DB
+    RepoImpl -->|转换| Converter
+
+    EmailGW -.->|调用| EmailService
+    SmsGW -.->|调用| SMSService
+
+    %% DTO使用关系
+    Controller -.->|使用| Command
+    Controller -.->|返回| DTO
+    AppService -.->|返回| DTO
+    QryExe -.->|转换| DTO
+
+    %% 异常处理
+    Controller -.->|抛出| BizExc
+    Exception -->|捕获| BizExc
+    Exception -->|捕获| SysExc
+    BizExc -->|使用| ErrCode
+
+    %% ==========================================
+    %% 扩展点使用流程
+    %% ==========================================
+    subgraph ExtensionFlow["🔌 扩展点使用流程示例"]
+        direction LR
+        style ExtensionFlow fill:#e1bee7,stroke:#4a148c,stroke-width:2px
+
+        App["Application"] -->|1.传入场景| Exec["ExtensionExecutor"]
+        Exec -->|2.查找匹配| Default["Default实现<br/>@Extension bizId=DEFAULT<br/>📁 impl/Default*Ext.java"]
+        Exec -->|2.查找匹配| VIP["VIP实现<br/>@Extension bizId=VIP<br/>📁 impl/Vip*Ext.java"]
+        Exec -->|3.执行| ExtLogic["扩展点逻辑"]
+
+        ExtFlow -.->|兜底| Default
+    end
+
+    %% ==========================================
+    %% 样式定义
+    %% ==========================================
+    classDef externalStyle fill:#e0e0e0,stroke:#424242,stroke-width:2px
+    classDef extensionStyle fill:#fff8e1,stroke:#ff6f00,stroke-width:2px
+    classDef moduleStyle fill:#f5f5f5,stroke:#616161,stroke-width:2px
+
+    class HTTP,MQ,Schedule externalStyle
+    class ExtExec,ExtBiz,ExtAnn extensionStyle
+    class AdapterModule,ClientModule,AppModule,DomainModule,InfraModule,MStart,MAdapter,MApp,MDomain,MInfra,MClient moduleStyle
